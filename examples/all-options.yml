@@ -1,0 +1,47 @@
+name: Render charts (all options)
+
+on:
+  pull_request:
+    paths:
+      - "charts/**/*.gs"
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: groovescript/chart-action@v0
+        with:
+          # Pin a specific groovescript release or SHA (default: latest)
+          groovescript-version: v0.1.0
+
+          # Pin a specific LilyPond version (default: 2.24.3)
+          lilypond-version: "2.24.3"
+
+          # Glob(s) of .gs files to consider (default: **/*.gs)
+          paths: "charts/**/*.gs"
+
+          # Compile only PR-changed files (default: true)
+          only-changed: "true"
+
+          # Also commit the intermediate .ly alongside the .pdf (default: true)
+          commit-ly: "true"
+
+          # Prefix for the render commit message (default: Re-render charts)
+          commit-message: "Re-render charts"
+
+          # Fail the workflow if any file fails to compile (default: true)
+          # Set to "false" to commit partial results during heavy refactors.
+          fail-on-error: "true"
+
+          # Restrict the action to a subdirectory of the repo (default: .)
+          working-directory: "charts"

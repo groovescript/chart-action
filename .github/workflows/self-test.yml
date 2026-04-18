@@ -1,0 +1,70 @@
+name: Self-test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore LilyPond cache
+        id: lily-cache
+        uses: actions/cache@v4
+        with:
+          path: /opt/lilypond
+          key: lilypond-${{ runner.os }}-2.24.3
+
+      - name: Install LilyPond (cache miss)
+        if: steps.lily-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: ./scripts/install-lilypond.sh
+        env:
+          LILYPOND_VERSION: "2.24.3"
+
+      - name: Put LilyPond on PATH
+        run: echo "/opt/lilypond/bin" >> "$GITHUB_PATH"
+
+      - name: Verify LilyPond version
+        run: |
+          lilypond --version
+          actual=$(lilypond --version | head -1 | grep -oP '\d+\.\d+\.\d+')
+          if [ "$actual" != "2.24.3" ]; then
+            echo "::error::LilyPond version mismatch: expected 2.24.3, got ${actual}"
+            exit 1
+          fi
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install groovescript
+        run: uv tool install "git+https://github.com/groovescript/groovescript"
+
+      - name: Compile fixture
+        run: |
+          groovescript compile examples/fixture.gs -o examples/fixture.ly
+          lilypond -o examples/fixture examples/fixture.ly
+
+      - name: Assert PDF was produced
+        run: |
+          if [ ! -f examples/fixture.pdf ]; then
+            echo "::error::examples/fixture.pdf was not produced"
+            exit 1
+          fi
+          # Verify it's a real PDF
+          if ! head -c 4 examples/fixture.pdf | grep -q '%PDF'; then
+            echo "::error::examples/fixture.pdf does not appear to be a valid PDF"
+            exit 1
+          fi
+          echo "fixture.pdf OK ($(du -h examples/fixture.pdf | cut -f1))"

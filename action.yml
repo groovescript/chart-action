@@ -1,0 +1,115 @@
+name: GrooveScript Chart Action
+description: Compile .gs drum charts to PDF on pull requests
+author: groovescript
+
+inputs:
+  groovescript-version:
+    description: >
+      Git ref (tag, branch, or SHA) of groovescript/groovescript to
+      install. Default: latest release tag.
+    required: false
+    default: latest
+  lilypond-version:
+    description: LilyPond version to install (e.g. "2.24.3").
+    required: false
+    default: "2.24.3"
+  paths:
+    description: >
+      Newline-separated glob(s) of .gs files to consider. Default:
+      every .gs in the repo.
+    required: false
+    default: "**/*.gs"
+  only-changed:
+    description: >
+      If "true" (default), compile only .gs files changed in the PR
+      relative to the base branch. If "false", compile every match of
+      `paths`.
+    required: false
+    default: "true"
+  commit-ly:
+    description: >
+      If "true" (default), stage and commit the intermediate .ly next
+      to the .pdf. If "false", only .pdf is committed.
+    required: false
+    default: "true"
+  commit-message:
+    description: Commit message prefix for the render commit.
+    required: false
+    default: "Re-render charts"
+  fail-on-error:
+    description: >
+      If "true" (default), the workflow fails when any .gs fails to
+      compile. Already-rendered successful files are NOT committed in
+      that case (all-or-nothing).
+    required: false
+    default: "true"
+  working-directory:
+    description: >
+      Directory to search for .gs files. Useful when charts live in a
+      subfolder. Default: repo root.
+    required: false
+    default: "."
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout PR head
+      shell: bash
+      run: |
+        if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+          git fetch --unshallow origin "${{ github.base_ref }}"
+        else
+          git fetch origin "${{ github.base_ref }}"
+        fi
+
+    - name: Restore LilyPond cache
+      id: lily-cache
+      uses: actions/cache@v4
+      with:
+        path: /opt/lilypond
+        key: lilypond-${{ runner.os }}-${{ inputs.lilypond-version }}
+
+    - name: Install LilyPond (cache miss)
+      if: steps.lily-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: ${{ github.action_path }}/scripts/install-lilypond.sh
+      env:
+        LILYPOND_VERSION: ${{ inputs.lilypond-version }}
+
+    - name: Put LilyPond on PATH
+      shell: bash
+      run: echo "/opt/lilypond/bin" >> "$GITHUB_PATH"
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
+
+    - name: Install groovescript
+      shell: bash
+      run: |
+        ref="${{ inputs.groovescript-version }}"
+        if [ "$ref" = "latest" ]; then
+          uv tool install "git+https://github.com/groovescript/groovescript"
+        else
+          uv tool install \
+            "git+https://github.com/groovescript/groovescript@${ref}"
+        fi
+
+    - name: Compile charts
+      shell: bash
+      run: ${{ github.action_path }}/scripts/compile-changed.sh
+      env:
+        PATHS: ${{ inputs.paths }}
+        ONLY_CHANGED: ${{ inputs.only-changed }}
+        BASE_REF: ${{ github.base_ref }}
+        FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
+
+    - name: Commit rendered artifacts
+      shell: bash
+      run: ${{ github.action_path }}/scripts/commit-artifacts.sh
+      env:
+        COMMIT_LY: ${{ inputs.commit-ly }}
+        COMMIT_MESSAGE: ${{ inputs.commit-message }}
+        HEAD_REF: ${{ github.event.pull_request.head.ref }}
