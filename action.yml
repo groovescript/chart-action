@@ -29,10 +29,10 @@ inputs:
     default: "true"
   commit-ly:
     description: >
-      If "true" (default), stage and commit the intermediate .ly next
-      to the .pdf. If "false", only .pdf is committed.
+      If "true", stage and commit the intermediate .ly next to the
+      .pdf. If "false" (default), only .pdf is committed.
     required: false
-    default: "true"
+    default: "false"
   commit-message:
     description: Commit message prefix for the render commit.
     required: false
