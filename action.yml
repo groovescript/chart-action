@@ -6,7 +6,8 @@ inputs:
   groovescript-version:
     description: >
       Git ref (tag, branch, or SHA) of groovescript/groovescript to
-      install. Default: latest release tag.
+      install. Default "latest" tracks the default branch HEAD of
+      groovescript/groovescript. Pin a tag or SHA for reproducibility.
     required: false
     default: latest
   lilypond-version:
@@ -55,11 +56,13 @@ runs:
   steps:
     - name: Checkout PR head
       shell: bash
+      env:
+        BASE_REF: ${{ github.base_ref }}
       run: |
         if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
-          git fetch --unshallow origin "${{ github.base_ref }}"
+          git fetch --unshallow origin "$BASE_REF"
         else
-          git fetch origin "${{ github.base_ref }}"
+          git fetch origin "$BASE_REF"
         fi
 
     - name: Restore LilyPond cache
@@ -87,13 +90,14 @@ runs:
 
     - name: Install groovescript
       shell: bash
+      env:
+        GS_REF: ${{ inputs.groovescript-version }}
       run: |
-        ref="${{ inputs.groovescript-version }}"
-        if [ "$ref" = "latest" ]; then
-          uv tool install "git+https://github.com/groovescript/groovescript"
+        repo="https://github.com/groovescript/groovescript"
+        if [ "$GS_REF" = "latest" ]; then
+          uv tool install "git+${repo}"
         else
-          uv tool install \
-            "git+https://github.com/groovescript/groovescript@${ref}"
+          uv tool install "git+${repo}@${GS_REF}"
         fi
 
     - name: Compile charts
@@ -112,4 +116,6 @@ runs:
       env:
         COMMIT_LY: ${{ inputs.commit-ly }}
         COMMIT_MESSAGE: ${{ inputs.commit-message }}
+        BASE_REF: ${{ github.base_ref }}
         HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}

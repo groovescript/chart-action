@@ -4,16 +4,51 @@ set -euo pipefail
 # Resolve working directory (default: repo root)
 WORK_DIR="${WORKING_DIRECTORY:-.}"
 
+# Parse PATHS (newline-separated globs, default **/*.gs) into an array.
+# Blank lines and comments (#) are ignored.
+path_globs=()
+while IFS= read -r line; do
+    line="${line#"${line%%[![:space:]]*}"}"   # ltrim
+    line="${line%"${line##*[![:space:]]}"}"   # rtrim
+    [ -z "$line" ] && continue
+    case "$line" in \#*) continue ;; esac
+    path_globs+=("$line")
+done <<< "${PATHS:-**/*.gs}"
+[ ${#path_globs[@]} -eq 0 ] && path_globs=("**/*.gs")
+
+# Test whether a path matches any of the configured globs.
+# Uses bash extglob so ** spans directories.
+shopt -s extglob globstar nullglob
+matches_paths() {
+    local candidate="$1"
+    local glob
+    for glob in "${path_globs[@]}"; do
+        # shellcheck disable=SC2053
+        if [[ "$candidate" == $glob ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 # Collect .gs files to compile based on ONLY_CHANGED and PATHS settings.
-# Writes a list of paths (relative to repo root) to compile to stdout.
+# Writes a newline-separated list of paths (relative to repo root) to stdout.
 collect_targets() {
     if [ "${ONLY_CHANGED}" = "true" ]; then
-        # Only files added or modified in this PR vs. the base branch
+        # Files added or modified in this PR vs. the base branch
         git diff --name-only --diff-filter=AM "origin/${BASE_REF}...HEAD" -- '*.gs'
     else
-        # All .gs files matching PATHS in WORKING_DIRECTORY
-        (cd "$WORK_DIR" && find . -name '*.gs' | sed 's|^\./||') \
-            | sed "s|^|${WORK_DIR}/|" | sed 's|^\./||'
+        # All .gs files under WORKING_DIRECTORY, printed as repo-relative paths
+        local f
+        (cd "$WORK_DIR" && find . -type f -name '*.gs' -print0) \
+            | while IFS= read -r -d '' f; do
+                f="${f#./}"
+                if [ "$WORK_DIR" = "." ]; then
+                    printf '%s\n' "$f"
+                else
+                    printf '%s/%s\n' "${WORK_DIR%/}" "$f"
+                fi
+            done
     fi
 }
 
@@ -43,17 +78,16 @@ while IFS= read -r gs_file; do
     # Normalise path: strip leading ./
     gs_file="${gs_file#./}"
 
-    # Apply PATHS glob filter when ONLY_CHANGED=true
-    # (when false, collect_targets already filtered by working directory)
-    if [ "${ONLY_CHANGED}" = "true" ]; then
-        # Check the file is under WORK_DIR
-        if [ "$WORK_DIR" != "." ]; then
-            case "$gs_file" in
-                "${WORK_DIR}/"*) ;;  # ok
-                *) continue ;;
-            esac
-        fi
+    # Restrict to WORKING_DIRECTORY
+    if [ "$WORK_DIR" != "." ]; then
+        case "$gs_file" in
+            "${WORK_DIR%/}/"*) ;;
+            *) continue ;;
+        esac
     fi
+
+    # Apply PATHS glob filter
+    matches_paths "$gs_file" || continue
 
     # Skip files that no longer exist (e.g., renamed in the same PR)
     if [ ! -f "$gs_file" ]; then
