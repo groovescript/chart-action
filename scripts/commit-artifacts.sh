@@ -40,8 +40,18 @@ while IFS= read -r gs_file; do
 done < "$compiled_list"
 
 # Also remove orphaned .ly/.pdf whose .gs was deleted in this PR
+# (deleted between the PR base and current HEAD).
+WORK_DIR="${WORKING_DIRECTORY:-.}"
 while IFS= read -r deleted; do
     [ -z "$deleted" ] && continue
+    deleted="${deleted#./}"
+    # Restrict to WORKING_DIRECTORY
+    if [ "$WORK_DIR" != "." ]; then
+        case "$deleted" in
+            "${WORK_DIR%/}/"*) ;;
+            *) continue ;;
+        esac
+    fi
     orphan_ly="${deleted%.gs}.ly"
     orphan_pdf="${deleted%.gs}.pdf"
     for f in "$orphan_ly" "$orphan_pdf"; do
@@ -50,7 +60,7 @@ while IFS= read -r deleted; do
             staged_files+=("$f (removed)")
         fi
     done
-done < <(git diff --name-only --diff-filter=D "origin/${HEAD_REF:-HEAD}...HEAD" -- '*.gs' 2>/dev/null || true)
+done < <(git diff --name-only --diff-filter=D "origin/${BASE_REF}...HEAD" -- '*.gs' 2>/dev/null || true)
 
 if [ ${#staged_files[@]} -eq 0 ]; then
     echo "Nothing to commit (artifacts unchanged)."

@@ -55,11 +55,13 @@ runs:
   steps:
     - name: Checkout PR head
       shell: bash
+      env:
+        BASE_REF: ${{ github.base_ref }}
       run: |
         if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
-          git fetch --unshallow origin "${{ github.base_ref }}"
+          git fetch --unshallow origin "$BASE_REF"
         else
-          git fetch origin "${{ github.base_ref }}"
+          git fetch origin "$BASE_REF"
         fi
 
     - name: Restore LilyPond cache
@@ -87,14 +89,25 @@ runs:
 
     - name: Install groovescript
       shell: bash
+      env:
+        GS_REF: ${{ inputs.groovescript-version }}
       run: |
-        ref="${{ inputs.groovescript-version }}"
-        if [ "$ref" = "latest" ]; then
-          uv tool install "git+https://github.com/groovescript/groovescript"
-        else
-          uv tool install \
-            "git+https://github.com/groovescript/groovescript@${ref}"
+        repo="https://github.com/groovescript/groovescript"
+        if [ "$GS_REF" = "latest" ]; then
+          # Resolve the latest release tag via the GitHub API so "latest"
+          # means "most recent published release", not "default branch HEAD".
+          GS_REF=$(curl -sSfL \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/groovescript/groovescript/releases/latest" \
+            | grep -oE '"tag_name":[[:space:]]*"[^"]+"' \
+            | head -1 \
+            | sed -E 's/.*"([^"]+)"$/\1/')
+          if [ -z "$GS_REF" ]; then
+            echo "::error::Could not resolve latest groovescript release tag"
+            exit 1
+          fi
         fi
+        uv tool install "git+${repo}@${GS_REF}"
 
     - name: Compile charts
       shell: bash
@@ -112,4 +125,6 @@ runs:
       env:
         COMMIT_LY: ${{ inputs.commit-ly }}
         COMMIT_MESSAGE: ${{ inputs.commit-message }}
+        BASE_REF: ${{ github.base_ref }}
         HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
