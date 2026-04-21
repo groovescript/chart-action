@@ -50,6 +50,12 @@ inputs:
       subfolder. Default: repo root.
     required: false
     default: "."
+  base-ref:
+    description: 'Base ref for diff comparison. Defaults to PR base.'
+    default: ${{ github.base_ref }}
+  head-ref:
+    description: 'Head ref to push rendered artifacts to. Defaults to PR head.'
+    default: ${{ github.event.pull_request.head.ref }}
 
 runs:
   using: composite
@@ -57,7 +63,7 @@ runs:
     - name: Checkout PR head
       shell: bash
       env:
-        BASE_REF: ${{ github.base_ref }}
+        BASE_REF: ${{ inputs.base-ref }}
       run: |
         if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
           git fetch --unshallow origin "$BASE_REF"
@@ -106,7 +112,7 @@ runs:
       env:
         PATHS: ${{ inputs.paths }}
         ONLY_CHANGED: ${{ inputs.only-changed }}
-        BASE_REF: ${{ github.base_ref }}
+        BASE_REF: ${{ inputs.base-ref }}
         FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
         WORKING_DIRECTORY: ${{ inputs.working-directory }}
 
@@ -116,6 +122,6 @@ runs:
       env:
         COMMIT_LY: ${{ inputs.commit-ly }}
         COMMIT_MESSAGE: ${{ inputs.commit-message }}
-        BASE_REF: ${{ github.base_ref }}
-        HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        BASE_REF: ${{ inputs.base-ref }}
+        HEAD_REF: ${{ inputs.head-ref }}
         WORKING_DIRECTORY: ${{ inputs.working-directory }}
