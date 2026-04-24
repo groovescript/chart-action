@@ -44,6 +44,12 @@ inputs:
       that case (all-or-nothing).
     required: false
     default: "true"
+  compact:
+    description: >
+      If "true", pass --compact to `groovescript compile` so rendered
+      PDFs use the compact layout. Default "false".
+    required: false
+    default: "false"
   working-directory:
     description: >
       Directory to search for .gs files. Useful when charts live in a
@@ -115,6 +121,7 @@ runs:
         BASE_REF: ${{ inputs.base-ref }}
         FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
         WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        COMPACT: ${{ inputs.compact }}
 
     - name: Commit rendered artifacts
       shell: bash

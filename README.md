@@ -57,6 +57,7 @@ score before merging.
 | `commit-message` | `Re-render charts` | Prefix for the render commit message. |
 | `fail-on-error` | `true` | Fail the workflow if any `.gs` fails to compile. No render commit is made when this triggers. Set to `false` for partial progress. |
 | `working-directory` | `.` | Restrict the action to a subdirectory of the repo. |
+| `compact` | `false` | Pass `--compact` to `groovescript compile` for compact PDF layout. |
 
 ## Performance
 

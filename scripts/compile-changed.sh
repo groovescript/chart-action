@@ -100,7 +100,11 @@ while IFS= read -r gs_file; do
     echo "Compiling: ${gs_file}"
 
     # Compile .gs → .ly
-    if ! compile_err=$(groovescript compile "$gs_file" -o "$ly_file" 2>&1); then
+    compile_args=("$gs_file" -o "$ly_file")
+    if [ "${COMPACT:-false}" = "true" ]; then
+        compile_args+=(--compact)
+    fi
+    if ! compile_err=$(groovescript compile "${compile_args[@]}" 2>&1); then
         emit_error "$gs_file" "$compile_err"
         failed_files+=("$gs_file")
         continue
